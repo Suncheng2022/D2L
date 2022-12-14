@@ -28,7 +28,6 @@ class Inception(nn.Module):
         x2 = self.p2(X)
         x3 = self.p3(X)
         x4 = self.p4(X)
-        # print(f'$$$$$$$$ {x1.shape} {x2.shape} {x3.shape} {x4.shape} ')
         return torch.cat((x1, x2, x3, x4), dim=1)
 
 
@@ -67,12 +66,12 @@ class GoogLeNet(nn.Module):
         # build block five
         self.block_5 = build_inception_block(three_block_arch[2])
         self.block_5.add_module(f'block_5 GAP', nn.AdaptiveAvgPool2d(output_size=(1, 1)))
+        self.block_5.add_module('dropout', nn.Dropout(.5))
         self.block_5.add_module(f'block_5 flatten', nn.Flatten())
 
         self.net = nn.Sequential(
             self.block_1, self.block_2, self.block_3, self.block_4, self.block_5,
-            nn.Dropout(.5),
-            nn.Linear(1024, 10)
+            nn.Linear(1024, 10), nn.Softmax(dim=1)
         )
         print(f'Constructing GoogLeNet successfully!')
 
