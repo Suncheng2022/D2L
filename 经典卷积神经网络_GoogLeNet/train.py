@@ -36,10 +36,10 @@ def init_weights(m):
 def main():
     parser = argparse.ArgumentParser(description='GoogLeNet by sc. 2022.12.13')
     parser.add_argument('--gpu', default=0, type=str, help='')
-    parser.add_argument('--batch_size', default=256, type=int, help='')
+    parser.add_argument('--batch_size', default=64, type=int, help='')
     parser.add_argument('--num_workers', default=8, type=int, help='')
     parser.add_argument('--num_epochs', default=10, type=int, help='')
-    parser.add_argument('--lr', default=.3, type=float, help='')
+    parser.add_argument('--lr', default=.1, type=float, help='')
     parser.add_argument('--resume', default='', type=str, help='')
     parser.add_argument('--logger_step', default=10, type=int, help='')
     parser.add_argument('--val', default='', action='store_true', help='just validate model.')
