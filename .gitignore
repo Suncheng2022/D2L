@@ -1,4 +1,10 @@
 .vscode
 data
+
 *.pth
 *.pth.tar
+
+
+*.jpg
+*.JPG
+*.png

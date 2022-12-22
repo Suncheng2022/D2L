@@ -4,6 +4,8 @@
 
     fine-fune自己的数据总是过拟合--似乎找到了原因，解决了推测时候总是出错的问题
     model.eval()模式对推断的时候影响很大！
+    更换数据集后，如类别数变化要修改最后的分类全连接层
+    小实验：迁移学习/微调可以将骨架网络(或者其他什么特征提取部分)学习率设为0，fc使用小学习率，效果也很好。
 """
 import pdb
 
@@ -38,7 +40,7 @@ def fine_tuning_train():
     parser.add_argument('--num_epochs', default=5, type=int, help='')
     parser.add_argument('--lr', default=5e-5, type=float, help='')
     parser.add_argument('--fine_tune', action='store_true', help='load pretrain and different learning rate for different layer.')
-    parser.add_argument('--logger_name', default='./runs/car/model_best.pth', type=str, help='')
+    parser.add_argument('--logger_name', default='./runs/liushuo/model_best.pth', type=str, help='')
     parser.add_argument('--resume', default='', type=str, help='eg:./runs/model_best.pth')
     parser.add_argument('--eval', action='store_true', help='')
     parser.add_argument('--detect', default='', help='eg ./images/001.jpg')
@@ -51,7 +53,7 @@ def fine_tuning_train():
 
     # Construct the model
     model = torchvision.models.resnet18(pretrained=True)
-    model.fc = torch.nn.Linear(model.fc.in_features, 2)
+    model.fc = torch.nn.Linear(model.fc.in_features, 3)
     torch.nn.init.xavier_uniform_(model.fc.weight)
     model.to(device)
     if opt.resume:
@@ -77,13 +79,13 @@ def fine_tuning_train():
     if opt.detect:
         from PIL import Image
         model_eval = torchvision.models.resnet18()
-        model_eval.fc = torch.nn.Linear(model.fc.in_features, 2)
+        model_eval.fc = torch.nn.Linear(model.fc.in_features, 3)
         model_eval.to(device)
-        model_eval.load_state_dict(torch.load('./runs/car/model_best.pth'))
+        model_eval.load_state_dict(torch.load('./runs/liushuo/model_best.pth'))
         model_eval.eval()   # 这句话对预测结果很关键！！！
 
         # class_dict = {1: 'not-hotdog', 0: 'hotdog'}
-        class_dict = {1: 'hotdog', 0: 'car'}
+        class_dict = {1: 'hotdog', 0: 'car', 2: 'liushuo'}
         # pdb.set_trace()
         img = Image.open(opt.detect)
         img = test_augs(img)
@@ -141,6 +143,7 @@ def fine_tuning_train():
             if i % opt.logger_step == 0:
                 print(f'epoch {epoch + 1}/{opt.num_epochs} iter {i}/{len(train_iter)} loss {l.sum():.7f} '
                       f'accuracy {iter_correct / iter_total * 100:.2f}%')
+                print(f'$$$$$$$$$$ {model.fc.weight.sum()}\t{param_1x[0].data.sum()}\t{param_1x[1].data.sum()}')
             correct += iter_correct
             total += iter_total
         train_acc = correct / total
