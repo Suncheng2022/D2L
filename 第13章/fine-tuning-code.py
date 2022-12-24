@@ -3,11 +3,11 @@ import torch
 import torchvision
 from torch import nn
 from d2l import torch as d2l
-os.environ["KMP_DUPLICATE_LIB_OK"]='TRUE'
 
+os.environ["KMP_DUPLICATE_LIB_OK"] = 'TRUE'
 
 d2l.DATA_HUB['hotdog'] = (d2l.DATA_URL + 'hotdog.zip',
-                         'fba480ffa8aa7e0febbb511d181409f899b9baa5')
+                          'fba480ffa8aa7e0febbb511d181409f899b9baa5')
 
 data_dir = d2l.download_extract('hotdog')
 train_imgs = torchvision.datasets.ImageFolder(os.path.join(data_dir, 'train'))
@@ -47,11 +47,11 @@ def train_fine_tuning(net, learning_rate, batch_size=16, num_epochs=5,
     loss = nn.CrossEntropyLoss(reduction="none")
     if param_group:
         params_1x = [param for name, param in net.named_parameters()
-             if name not in ["fc.weight", "fc.bias"]]
+                     if name not in ["fc.weight", "fc.bias"]]
         trainer = torch.optim.SGD([{'params': params_1x},
                                    {'params': net.fc.parameters(),
                                     'lr': learning_rate * 10}],
-                                lr=learning_rate, weight_decay=0.001)
+                                  lr=learning_rate, weight_decay=0.001)
     else:
         trainer = torch.optim.SGD(net.parameters(), lr=learning_rate,
                                   weight_decay=0.001)
@@ -59,5 +59,5 @@ def train_fine_tuning(net, learning_rate, batch_size=16, num_epochs=5,
                    devices)
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     train_fine_tuning(finetune_net, 5e-5)

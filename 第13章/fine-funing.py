@@ -1,6 +1,9 @@
 """
 重新写一遍微调：
     似乎对学习率很敏感，5e-4pretrain就差、5e-5瞬间变好
+    修改了初始化逻辑，if opt.fine_tune只初始化fc，否则全部初始化
+    opt.fine_tune超参可以控制是否加载pretrain
+    尝试了从头开始训练，resume 1次共20epochs，测试精度85.33%，也不错
 
     fine-fune自己的数据总是过拟合--似乎找到了原因，解决了推测时候总是出错的问题
     model.eval()模式对推断的时候影响很大！
@@ -14,8 +17,14 @@ import torch
 import argparse
 import os
 
+from torch import nn
 from torch.utils import data
 from torchvision import transforms
+
+
+def init_weight(m):
+    if type(m) in [nn.Linear, nn.Conv2d]:
+        nn.init.xavier_uniform_(m.weight)
 
 
 def evaluate(net, data_iter):
@@ -45,6 +54,7 @@ def fine_tuning_train():
     parser.add_argument('--eval', action='store_true', help='')
     parser.add_argument('--detect', default='', help='eg ./images/001.jpg')
     parser.add_argument('--logger_step', default=10, type=int, help='')
+    parser.add_argument('--num_workers', default=4, type=int, help='')
 
     opt = parser.parse_args()
     print(opt)
@@ -52,9 +62,12 @@ def fine_tuning_train():
     print(f'running on {device}')
 
     # Construct the model
-    model = torchvision.models.resnet18(pretrained=True)
-    model.fc = torch.nn.Linear(model.fc.in_features, 3)
-    torch.nn.init.xavier_uniform_(model.fc.weight)
+    model = torchvision.models.resnet18(pretrained=True if opt.fine_tune else False)
+    model.fc = torch.nn.Linear(model.fc.in_features, 3)     # 根据不同数据集相应调整输出类别
+    if opt.fine_tune:
+        torch.nn.init.xavier_uniform_(model.fc.weight)
+    else:
+        model.apply(init_weight)
     model.to(device)
     if opt.resume:
         print(f'loading pretrain model {opt.resume}')
@@ -104,8 +117,8 @@ def fine_tuning_train():
     imgfld_test = torchvision.datasets.ImageFolder(root=os.path.join(data_dir, 'test'), transform=test_augs)
     classes_dict = imgfld_train.class_to_idx
     print(f'$$$$$$$$$ {classes_dict}')
-    train_iter = data.DataLoader(dataset=imgfld_train, batch_size=opt.batch_size, shuffle=True)
-    test_iter = data.DataLoader(dataset=imgfld_test, batch_size=opt.batch_size)
+    train_iter = data.DataLoader(dataset=imgfld_train, batch_size=opt.batch_size, shuffle=True, num_workers=opt.num_workers)
+    test_iter = data.DataLoader(dataset=imgfld_test, batch_size=opt.batch_size, num_workers=opt.num_workers)
     # look the images after augs
     # imgs = [imgfld_train[i][0] for i in range(8)]
     # [img.show() for img in imgs]
@@ -143,7 +156,7 @@ def fine_tuning_train():
             if i % opt.logger_step == 0:
                 print(f'epoch {epoch + 1}/{opt.num_epochs} iter {i}/{len(train_iter)} loss {l.sum():.7f} '
                       f'accuracy {iter_correct / iter_total * 100:.2f}%')
-                print(f'$$$$$$$$$$ {model.fc.weight.sum()}\t{param_1x[0].data.sum()}\t{param_1x[1].data.sum()}')
+                # print(f'$$$$$$$$$$ {model.fc.weight.sum()}\t{param_1x[0].data.sum()}\t{param_1x[1].data.sum()}')
             correct += iter_correct
             total += iter_total
         train_acc = correct / total
