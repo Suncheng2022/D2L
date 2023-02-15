@@ -9,3 +9,5 @@ data
 *.jpg
 *.JPG
 *.png
+
+**pycache**
