@@ -1,6 +1,7 @@
 .vscode
 .idea
 data
+others
 
 *.pth
 *.pth.tar
