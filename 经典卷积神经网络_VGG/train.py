@@ -35,7 +35,7 @@ def main():
     parser.add_argument('--lr', default=.05, type=float, help='')
     parser.add_argument('--num_epochs', default=10, type=int, help='')
     parser.add_argument('--gpu', default=0, type=str, help='')
-    parser.add_argument('--log_step', default=100, type=int, help='')
+    parser.add_argument('--log_step', default=10, type=int, help='')
     parser.add_argument('--val', action='store_true', help='Just evaluate model.')
     parser.add_argument('--init_weights', action='store_true', help='Using Xavier init weights.')
     parser.add_argument('--resume', default='', metavar='PATH', help='')
@@ -43,7 +43,8 @@ def main():
     opt = parser.parse_args()
     print(f'Hyper Params:{opt}')
 
-    device = torch.device(f'cuda:0') if torch.cuda.device_count() else torch.device(f'cpu')
+    # device = torch.device(f'cuda:0') if torch.cuda.device_count() else torch.device(f'cpu')
+    device = torch.device(f'mps')
     conv_arch = ((1, 64), (1, 128), (2, 256), (2, 512), (2, 512))  # 共8个卷积层--再加上3个全连接层就是VGG11
     small_conv_arch = ((pair[0], pair[1] // 4) for pair in conv_arch)
     model = vgg(small_conv_arch)
@@ -101,7 +102,7 @@ def main():
             iter_total = y.numel()
             if i % opt.log_step == 0:
                 print(f'epoch {epoch + 1}/{opt.num_epochs} iter {i}/{len(train_iter)} '
-                      f'acc {iter_correct / iter_total * 100:.2f}%')
+                      f'acc {iter_correct / iter_total * 100:.2f}% loss:{l:.4f}')
             correct += iter_correct
             total += iter_total
         epoch_acc = correct / total
