@@ -352,6 +352,24 @@ class Decoder(nn.Module):
         return self.norm(x)
 
 
+""" 2.5输出部分的实现 """
+class Generator(nn.Module):
+    """ 构建Generator类 """
+    def __init__(self, d_model, vocab_size):
+        """
+        :param d_model: 词嵌入维度
+        :param vocab_size: 词表大小
+        """
+        super(Generator, self).__init__()
+        # 定义线性层，作用是完成网络输出维度的转换
+        self.project = nn.Linear(d_model, vocab_size)
+
+    def forward(self, x):
+        """ x：上一层输出的张量 """
+        return F.log_softmax(self.project(x), dim=-1)
+
+
+""" 2.6模型的构建 """
 
 if __name__ == '__main__':
     """ 2.3 编码器部分的实现 """
@@ -517,12 +535,18 @@ if __name__ == '__main__':
 
     de = Decoder(layer, N)
     de_result = de(x, memory, source_mask, target_mask)
-    print(de_result, de_result.shape)
+    # print(de_result, de_result.shape)
 
+    """ 2.5输出部分的实现 """
+    d_model = 512
+    vocab_size = 1000
+    x = de_result
 
+    gen = Generator(d_model, vocab_size)
+    gen_result = gen(x)
+    print('gen_result', gen_result, gen_result.shape)
 
-
-
+    """ 2.6模型的构建 """
 
 
     """ 2.2输入部分的实现 """
