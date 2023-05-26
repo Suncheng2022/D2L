@@ -290,6 +290,68 @@ class Encoder(nn.Module):
         return self.norm(x)
 
 
+class DecoderLayer(nn.Module):
+    """ 构建解码器层的类 """
+    def __init__(self, size, self_attn, src_attn, feed_forward, dropout):
+        """
+        :param size: 词嵌入维度
+        :param self_attn: 多头自注意力机制的实例化对象
+        :param src_attn: 常规的注意力机制的实例化对象
+        :param feed_forward: 前馈全连接层的实例化对象
+        :param dropout: 随机置零比率
+        """
+        super(DecoderLayer, self).__init__()
+        # 将参数传入
+        self.size = size
+        self.self_attn = self_attn
+        self.src_attn = src_attn
+        self.feed_forward = feed_forward
+        self.dropout = dropout
+        # 按照解码器层的结构，克隆3个子层连接对象
+        self.sublayer = clones(SublayerConnection(self.size, self.dropout), 3)
+
+    def forward(self, x, memory, source_mask, target_mask):
+        """
+        :param x: 上一层输入张量
+        :param memory: 编码器的语义存储张量
+        :param source_mask: 源数据的掩码张量
+        :param target_mask: 目标数据的掩码张量
+        """
+        m = memory
+        # 第一步让x经历第一个子层，多头自注意力的子层
+        # 采用target_mask，解码时遮掩未来的信息，比如模型解码第二个字符时，只能看见第一个字符信息，后面的不能看到
+        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, target_mask))
+        # 第二步让x经历第二个子层，常规注意力层，Q!=K==V
+        # 采用source_mask，为了遮掩掉对结果信息无用的数据
+        x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, source_mask))
+        # 第三步让x经历第三个子层，前馈全连接层
+        return self.sublayer[2](x, self.feed_forward)
+
+
+class Decoder(nn.Module):
+    """ 构建解码器类 """
+    def __init__(self, layer, N):
+        """
+        :param layer: 代表解码器层的实例化对象
+        :param N: 代表将layer进行N次拷贝
+        """
+        super(Decoder, self).__init__()
+        self.layers = clones(layer, N)
+        self.norm = LayerNorm(layer.size)
+
+    def forward(self, x, memory, source_mask, target_mask):
+        """
+        :param x: 代表目标数据的嵌入表示
+        :param memory: 代表编码器的输出张量
+        :param source_mask: 源数据的掩码张量
+        :param target_mask: 目标数据的掩码张量
+        """
+        # x依次经过所有编码器层的处理，最后经过规范化层
+        for layer in self.layers:
+            x = layer(x, memory, source_mask, target_mask)
+        return self.norm(x)
+
+
 
 if __name__ == '__main__':
     """ 2.3 编码器部分的实现 """
@@ -418,9 +480,44 @@ if __name__ == '__main__':
 
     en = Encoder(layer, N)
     en_result = en(x, mask)
-    print(f'编码器类输出 {en_result}\n{en_result.shape}')
+    # print(f'编码器类输出 {en_result}\n{en_result.shape}')
 
+    # 测试解码器层类
+    size = d_model = 512
+    head = 8
+    d_ff = 64
+    dropout = .2
 
+    self_attn = src_attn = MultiHeadAttention(head, d_model, dropout)
+    ff = PositionwiseFeedForward(d_model, d_ff, dropout)
+    x = pe_result = torch.repeat_interleave(x_emb_pe, repeats=4, dim=0)
+    memory = en_result
+    mask = Variable(torch.zeros(8, 4, 4))
+    source_mask = target_mask = mask
+
+    dl = DecoderLayer(size, self_attn, src_attn, ff, dropout)
+    dl_reslut = dl(x, memory, source_mask, target_mask)
+    # print(dl_reslut, dl_reslut.shape, sep='\n')
+
+    # 测试解码器层的类
+    size = d_model = 512
+    head = 8
+    d_ff = 64
+    dropout = .2
+    c = copy.deepcopy
+    attn = MultiHeadAttention(head, size)
+    ff = PositionwiseFeedForward(d_model, d_ff, dropout)
+    layer = DecoderLayer(size, c(attn), c(attn), c(ff), dropout)
+
+    N = 8
+    x = pe_result
+    memory = en_result
+    mask = Variable(torch.zeros(8, 4, 4))
+    source_mask = target_mask = mask
+
+    de = Decoder(layer, N)
+    de_result = de(x, memory, source_mask, target_mask)
+    print(de_result, de_result.shape)
 
 
 
