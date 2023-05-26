@@ -264,6 +264,33 @@ class EncoderLayer(nn.Module):
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
         return self.sublayer[1](x, self.feed_forward)
 
+
+class Encoder(nn.Module):
+    """ 构建编码器类 """
+    def __init__(self, layer, N):
+        """
+        :param layer: 代表编码器层
+        :param N: 编码器中有几个layer
+        """
+        super(Encoder, self).__init__()
+        # 使用clones()函数克隆N个编码器放在self.layers中
+        self.layers = clones(layer, N)
+        # 初始化规范化层，作用在编码器最后面
+        # print(f'$$$$$$$$$$$$$$$$ 可能报错 layer.d_model {layer.d_model}')
+        self.norm = LayerNorm(layer.d_model)
+
+    def forward(self, x, mask):
+        """
+        :param x: 上一层的输出
+        :param mask: 掩码张量
+        """
+        # x依次经过N个编码器的处理，最后经过规范化层
+        for layer in self.layers:
+            x = layer(x, mask)
+        return self.norm(x)
+
+
+
 if __name__ == '__main__':
     """ 2.3 编码器部分的实现 """
     # 测试np.triu()
@@ -375,8 +402,23 @@ if __name__ == '__main__':
 
     el = EncoderLayer(d_model, self_attn, ff, dropout)
     el_result = el(x, mask)
-    print(el_result, el_result.shape)
+    # print(el_result, el_result.shape)
 
+    # 测试编码器类
+    d_model = 512
+    d_ff = 64
+    head = 8
+    c = copy.deepcopy
+    attn = MultiHeadAttention(head, d_model)
+    ff = PositionwiseFeedForward(d_model, d_ff, dropout)
+    dropout = .2
+    layer = EncoderLayer(d_model, c(attn), c(ff), dropout)
+    N = 8
+    mask = Variable(torch.zeros(8, 4, 4))
+
+    en = Encoder(layer, N)
+    en_result = en(x, mask)
+    print(f'编码器类输出 {en_result}\n{en_result.shape}')
 
 
 
