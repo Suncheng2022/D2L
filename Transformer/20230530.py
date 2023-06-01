@@ -594,3 +594,107 @@ gen = Generator(d_model, vocab_size)
 gen_result = gen(x)     # [2, 4, 1000]  1000 == vocab_size，要进行最后的token分类了
 # print(gen_result, gen_result.shape)
 
+# 构建 编码器-解码器 类
+class EncoderDecoder(nn.Module):
+    def __init__(self, encoder, decoder, source_embed, target_embed, generator):
+        """
+        :param encoder: 编码器实例化对象
+        :param decoder: 解码器实例化对象
+        :param source_embed: 源数据的嵌入函数
+        :param target_embed: 目标数据的嵌入函数
+        :param generator: 输出部分的类别生成器实例化对象
+        """
+        super(EncoderDecoder, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embed = source_embed
+        self.tgt_embed = target_embed
+        self.generator = generator
+
+    def forward(self, source, target, source_mask, target_mask):
+        """
+        :param source: 源数据  并未经历词嵌入
+        :param target: 目标数据 并未经历词嵌入
+        :param source_mask: 源数据掩码张量
+        :param target_mask: 目标数据的掩码张量
+        :return:
+        """
+        return self.decode(self.encode(source, source_mask), source_mask, target, target_mask)
+
+    def encode(self, source, source_mask):
+        """ 完成 原始输入的 嵌入+编码 """
+        return self.encoder(self.src_embed(source), source_mask)
+
+    def decode(self, memory, source_mask, target, target_mask):
+        """
+        解码输入：目标嵌入+编码最终输出，掩码
+        :param memory: 经历编码器后的输出张量
+        """
+        return self.decoder(self.tgt_embed(target), memory, source_mask, target_mask)
+
+
+vocab_size = 1000
+d_model = 512
+encoder = en    # 编码器
+decoder = de    # 解码器
+source_embed = nn.Embedding(vocab_size, d_model)    # 输入数据嵌入函数
+target_embed = nn.Embedding(vocab_size, d_model)    # 输出数据嵌入函数
+generator = gen
+
+source = target = Variable(torch.LongTensor([[100, 2, 421, 508],
+                                             [491, 998, 1, 221]]))
+source_mask = target_mask = Variable(torch.zeros(8, 4, 4))
+
+ed = EncoderDecoder(encoder, decoder, source_embed, target_embed, generator)
+ed_result = ed(source, target, source_mask, target_mask)        # [2, 4, 512]
+# print(ed_result, ed_result.shape)
+
+
+def make_model(source_vocab, target_vocab, N=6, d_model=512, d_ff=2048, head=8, dropout=.1):
+    """
+    构造完整的Transformer模型
+    :param source_vocab: 源数据的词汇总数
+    :param target_vocab: 目标数据的词汇总数
+    :param N: 编码器、解码器堆叠的层数
+    :param d_model: 词嵌入维度
+    :param d_ff: 前馈全连接层中变化矩阵维度
+    :param head: 多头注意力机制的头数
+    :param dropout: 置零比率
+    """
+    c = copy.deepcopy
+
+    # 实例化多头注意力的类
+    attn = MultiHeadedAttention(head, d_model)
+
+    # 实例化一个前馈全连接层网络
+    ff = PositionWiseFeedForward(d_model, d_ff, dropout)
+
+    # 实例化一个位置编码器
+    position = PositionalEncoding(d_model, dropout)
+
+    # 实例化模型model，利用的是EncoderDecoder类
+    # 编码器结构有2个子层——attention层和前馈全连接层
+    # 解码器结构有3个子层——两个attention层和一个前馈全连接层
+    model = EncoderDecoder(
+        Encoder(EncoderLayer(d_model, c(attn), c(ff), dropout), N),
+        Decoder(DecoderLayer(d_model, c(attn), c(attn), c(ff), dropout), N),
+        nn.Sequential(Embeddings(d_model, source_vocab), c(position)),
+        nn.Sequential(Embeddings(d_model, target_vocab), c(position)),
+        Generator(d_model, target_vocab)
+    )
+
+    # 初始化整个模型参数，判断参数维度>1则将矩阵初始化服从均匀分布的矩阵
+    for p in model.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform(p)
+
+    return model
+
+
+source_vocab = 11
+target_vocab = 11
+N = 6
+
+if __name__ == "__main__":
+    res = make_model(source_vocab, target_vocab, N)
+    print(res)
