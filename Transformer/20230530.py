@@ -461,3 +461,111 @@ en = Encoder(layer, N)
 en_result = en(x, mask)     # [2, 4, 512]
 # print(en_result, en_result.shape)
 
+
+# 构建解码器层的类
+class DecoderLayer(nn.Module):
+    def __init__(self, size, self_attn, src_attn, feed_forward, dropout):
+        """
+        :param size: 词嵌入维度
+        :param self_attn: 多头自注意力机制实例化对象
+        :param src_attn: 常规注意力机制实例化对象
+        :param feed_forward: 前馈全连接层实例化对象
+        :param dropout: 置零比率
+        """
+        super(DecoderLayer, self).__init__()
+
+        # 将参数传入类中
+        self.size = size
+        self.self_attn = self_attn
+        self.src_attn = src_attn
+        self.feed_forward = feed_forward
+        self.dropout = dropout
+
+        # 按照解码器层的结构图，使用clone()克隆3个子层连接对象
+        self.sublayer = clones(SublayerConnection(size, dropout), 3)
+
+    def forward(self, x, memory, source_mask, target_mask):
+        """
+        :param x: 上一层输入的张量
+        :param memory: 编码器的语义存储张量
+        :param source_mask: 源数据掩码张量
+        :param target_mask: 目标数据掩码张量
+        :return:
+        """
+        m = memory
+
+        # 第一步让x经历第一个子层，多头自注意力机制的子层
+        # 采用target_mask，为了将解码时未来的信息进行遮掩，比如模型解码第2个字符，只能看见第一个字符信息
+        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, target_mask))
+
+        # 第二步让x经历第二个子层，常规注意力机制子层，Q!=K=V
+        # 采用source_mask，为了遮掩掉对结果信息无用的数据
+        x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, source_mask))
+
+        # 第三步让x经历第三个子层，前馈全连接层
+        return self.sublayer[2](x, self.feed_forward)
+
+size = d_model = 512
+head = 8
+d_ff = 64
+dropout = .2
+
+self_attn = src_attn = MultiHeadedAttention(head, d_model, dropout)
+
+ff = PositionWiseFeedForward(d_model, d_ff, dropout)
+
+x = pe_result       # [2, 4, 512]
+
+memory = en_result      # [2, 4, 512]
+
+mask = Variable(torch.zeros(8, 4, 4))
+source_mask = target_mask = mask
+
+dl = DecoderLayer(size, self_attn, src_attn, ff, dropout)
+dl_reslut = dl(x, memory, source_mask, target_mask)     # [2, 4, 512]
+# print(dl_reslut, dl_reslut.shape)
+
+# 构建解码器类
+class Decoder(nn.Module):
+    def __init__(self, layer, N):
+        """
+        :param layer: 解码器层实例化对象
+        :param N:
+        """
+        super(Decoder, self).__init__()
+
+        self.layers = clones(layer, N)
+        # 实例化一个规范化层
+        self.norm = LayerNorm(layer.size)       # layer.size大概率词嵌入维度
+
+    def forward(self, x, memory, source_mask, target_mask):
+        """
+        :param x: 目标数据的嵌入表示
+        :param memory: 编码器的输出张量
+        :param source_mask: 源数据的掩码张量
+        :param target_mask: 目标数据的掩码张量
+        """
+        # 要将x依次经历所有的编码器层处理，最后通过规范化层
+        for layer in self.layers:
+            x = layer(x, memory, source_mask, target_mask)
+        return self.norm(x)
+
+size = d_model = 512
+head = 8
+d_ff = 64
+dropout = .2
+c = copy.deepcopy
+attn = MultiHeadedAttention(head, d_model)
+ff = PositionWiseFeedForward(d_model, d_ff, dropout)
+layer = DecoderLayer(d_model, c(attn), c(attn), c(ff), dropout)
+
+N = 8
+x = pe_result       # 位置嵌入结果
+memory = en_result  # 编码结果
+mask = Variable(torch.zeros(8, 4, 4))
+source_mask = target_mask = mask
+
+de = Decoder(layer, N)
+de_result = de(x, memory, source_mask, target_mask)
+print(de_result, de_result.shape)
+
