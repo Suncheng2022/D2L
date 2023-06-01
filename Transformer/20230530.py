@@ -567,5 +567,30 @@ source_mask = target_mask = mask
 
 de = Decoder(layer, N)
 de_result = de(x, memory, source_mask, target_mask)
-print(de_result, de_result.shape)
+# print(de_result, de_result.shape)
+
+# 构建Generator类
+class Generator(nn.Module):
+    def __init__(self, d_model, vocab_size):
+        """
+        :param d_model: 代表词嵌入的维度
+        :param vocab_size: 代表词表大小
+        """
+        super(Generator, self).__init__()
+        # 定义一个fc，完成网络输出维度变换
+        self.project = nn.Linear(d_model, vocab_size)
+
+    def forward(self, x):
+        """ x: 上一层输出张量 """
+        # 首先将x送入fc，让其经历softmax处理
+        return F.log_softmax(self.project(x), dim=-1)
+
+
+d_model = 512
+vocab_size = 1000
+x = de_result
+
+gen = Generator(d_model, vocab_size)
+gen_result = gen(x)     # [2, 4, 1000]  1000 == vocab_size，要进行最后的token分类了
+# print(gen_result, gen_result.shape)
 
