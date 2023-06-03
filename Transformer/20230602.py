@@ -32,20 +32,20 @@ train_text, val_text, test_text = torchtext.datasets.WikiText2.splits(text_field
 TEXT.build_vocab(train_text)
 
 # 设置GPU
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+# device = torch.device('mps' if torch.cuda.is_available() else 'cpu')    # NVIDIA GPU改为 'cuda'; Apple M芯片改为 'mps'
+device = torch.device('mps')
 
 # 构建批次数据的函数
 def batchify(data, batch_size):
     """
-    :param data: 之前得到的文本数据 train_text val_text test_text
+    :param data: 之前得到的文本数据 train_text val_text test_text; 使用data.examples[0].text[:10]查看字符
     :param batch_size:
     """
     # 第一步使用TEXT的numericalize()将单词映射成连续数字
-    data = TEXT.numericalize([data.examples[0].text])
+    data = TEXT.numericalize([data.examples[0].text])   # data.examples.__len__()为1 这句是将data的所有单词映射为数字
 
     # 第二步取得需要经过多少次的batch_size后能够遍历完所有数据
-    nbatch = data.size(0) // batch_size
+    nbatch = data.size(0) // batch_size     # data.size() 训练集torch.Size([2086708, 1])
 
     # 利用narrow()对数据进行切割
     # 第1个参数 代表横轴切割还是纵轴切割  0-横轴 1-纵轴
@@ -53,7 +53,7 @@ def batchify(data, batch_size):
     data = data.narrow(0, 0, nbatch * batch_size)  # 使用的数据刚好是 整数 个batch_size
 
     # 对data形状进行转变
-    data = data.view(batch_size, -1).t().contiguous()  # t()让batch_size到列上
+    data = data.view(batch_size, -1).t().contiguous()  # t()让batch_size到列上 [nbatch, batch_size]
     return data.to(device)
 
 
@@ -67,7 +67,7 @@ batch_size = 20
 eval_batch_size = 10
 
 # 获得训练数据、验证数据、测试数据
-train_data = batchify(train_text, batch_size)
+train_data = batchify(train_text, batch_size)   # [nbatch, batch_size]
 val_data = batchify(val_text, eval_batch_size)
 test_data = batchify(test_text, eval_batch_size)
 
@@ -88,7 +88,7 @@ def get_batch(source, i):
     # 首先得到源数据
     data = source[i:i + seq_len]
     # 然后得到目标数据
-    target = source[i + 1:i + 1 + seq_len]
+    target = source[i + 1:i + 1 + seq_len].view(-1)
     return data, target
 
 
@@ -99,7 +99,7 @@ def get_batch(source, i):
 
 # 设置模型超参数
 # 通过TEXT.vocab.stoi方法获取不重复的词汇总数
-ntokens = len(TEXT.vocab.stoi)
+ntokens = len(TEXT.vocab.stoi)      # 28785
 
 # 设置词嵌入维度的值等于200
 emsize = 200
@@ -117,7 +117,7 @@ nhead = 2
 dropout = .2
 
 # 将参数传入TransformerModel实例化模型
-model = TransformerModel(ntokens, emsize, nhead, nlayers, dropout).to(device)
+model = TransformerModel(ntokens, emsize, nhead, nhid, nlayers, dropout).to(device)
 
 # loss
 criterion = nn.CrossEntropyLoss()
@@ -145,15 +145,15 @@ def train():
     # 获取当前开始时间
     start_time = time.time()
     # 遍历训练数据，训练模型
-    for batch, i in enumerate(range(0, train_data.size(0) - 1, bptt)):
+    for batch, i in enumerate(range(0, train_data.size(0) - 1, bptt)):  # train_data.size() [104335, 20]
         # 通过前面的get_batch获取源数据和目标数据
-        data, targets = get_batch(train_data, i)
+        data, targets = get_batch(train_data, i)    # data [bptt, batch] target形状[bptt * batch]
         # 梯度归零
         optimizer.zero_grad()
-        # 通过模型预测输出
-        output = model(data)
-        # 计算loss
-        loss = criterion(output.view(-1, ntokens), targets)
+        # 通过模型预测输出  维度ntokens即对每个词预测的概率
+        output = model(data)    # torch.Size([bbpt35, batch20, ntokens28785])
+        # 计算loss    报错
+        loss = criterion(output.view(-1, ntokens), targets)     # output.view()后 [bbpt * batch, ntokens] target [bbpt * batch]
         # 反传
         loss.backward()
         # 剪裁梯度，防止梯度爆炸、消失
@@ -171,7 +171,7 @@ def train():
             # 打印
             print('| epoch {:3d} | {:5d}/{:5d} batches | '
                   'lr {:02.2f} | ms/batch {:5.2f} | '
-                  'loss {:5.2f} | ppl {:8.2f}'.format(0, batch, len(train_data) // bptt, schedualer.get_lr(),
+                  'loss {:5.2f} | ppl {:8.2f}'.format(epoch, batch, len(train_data) // bptt, schedualer.get_lr()[0],
                                                       elapased * 1000 / log_interval, cur_loss, math.exp(cur_loss)))
             # 每个打印批次结束后，将总损失清零
             total_loss = 0
@@ -190,7 +190,53 @@ def evaluate(eval_model, data_source):
 
     # 初始化总损失
     total_loss = 0
-    # 模型开启评估模式后，不进行反传
+    # 模型开启评估模式后，不进行反传，以加快计算
     with torch.no_grad():
         # 遍历验证数据
-        for i in range(0, data_source.size()  - 1,bptt);
+        for i in range(0, data_source.size(0) - 1, bptt):
+            # 首先通过get_batch()获取源数据和目标数据
+            data, targets = get_batch(data_source, i)
+            # 将源数据放入评估模型中，进行预测
+            output = eval_model(data)
+            # 对输出张量进行变形，遍历全部词汇的概率分布
+            output_flat = output.view(-1, ntokens)      # [拉平，总共有多少单词] 每一个单词都有一个概率
+            # 累加损失
+            total_loss += criterion(output_flat, targets).item()
+    # 返回评估的总损失值
+    return total_loss
+
+
+# 首先初始化最佳模型损失值
+best_val_loss = float('inf')
+
+epochs = 3
+
+# 定义最佳模型，初始化为空
+best_model = None
+
+# 训练
+for epoch in range(1, epochs + 1):
+    # 获取当前轮次开始时间
+    start_time = time.time()
+    # 直接调用训练函数进行模型训练
+    train()
+    # 调用评估函数得到验证集损失
+    val_loss = evaluate(model, val_data)
+    # 打印log
+    print('-' * 90)
+    print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '.format(epoch, (time.time() - start_time),
+                                                                                 val_loss))
+    print('-' * 90)
+    # 通过比较当前epoch的损失，获取最佳模型
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        best_model = model
+    # 每个epoch后调整优化器学习率
+    schedualer.step()
+
+
+# 添加测试流程代码
+test_loss = evaluate(best_model, test_data)
+print('-' * 90)
+print('| End of traning | test loss {:5.2f}'.format(test_loss))
+print('-' * 90)
