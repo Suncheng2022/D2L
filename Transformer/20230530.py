@@ -1,4 +1,11 @@
-""" 完全按照教程写代码 """
+""" 完全按照教程写代码
+2023.06.02
+    修改了库代码
+    位置 D:\ProgramData\miniconda3\envs\pt20\Lib\site-packages\pyitcast\transformer_utils.py line134
+    默认为 loss.data[0] * norm，改为return loss.data.item() * norm
+
+    推荐环境 torch1.3 python3.6
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,7 +14,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import copy
 import pdb
-
 from torch.autograd import Variable
 
 
@@ -694,7 +700,113 @@ def make_model(source_vocab, target_vocab, N=6, d_model=512, d_ff=2048, head=8, 
 source_vocab = 11
 target_vocab = 11
 N = 6
+#
+# if __name__ == "__main__":
+#     res = make_model(source_vocab, target_vocab, N)
+#     print(res)
 
-if __name__ == "__main__":
-    res = make_model(source_vocab, target_vocab, N)
-    print(res)
+
+from pyitcast.transformer_utils import Batch, get_std_opt, LabelSmoothing, SimpleLossCompute, run_epoch, greedy_decode
+
+def data_generator(V, batch_size, num_batch):
+    """
+    :param V: 随机生成数据的最大值+1
+    :param batch_size: 样本数量
+    :param num_batch: 一共有多少个batch_size的数据
+    :return:
+    """
+    for i in range(num_batch):
+        # 使用random.randint()随机生成[1, V)
+        # 分布的形状(batch, 10)
+        data = torch.from_numpy(np.random.randint(1, V, size=(batch_size, 10), dtype='int64'))
+
+        # 将数据第一列置1，作为起始标志
+        data[:, 0] = 1
+
+        # 因为是copy任务，所以源数据和目标数据完全一致
+        # 设置参数retuires_grad=False, 样本的参数不需要参与梯度计算
+        source = Variable(data, requires_grad=False)
+        target = Variable(data, requires_grad=False)
+
+        yield Batch(source, target)
+
+
+V = 11
+batch_size = 20
+num_batch = 30
+
+# 使用make_model()获得模型实例化对象
+model = make_model(V, V, N=2)
+
+# 使用工具包get_std_opt获得模型优化器
+model_optimizer = get_std_opt(model)
+
+# 使用工具包LabelSmoothing获得标签平滑对象
+# size 目标词汇总数，这里默认与源数据词汇总数相等；smoothing表示标签的平滑程度，如原来标签的表示值为1，则平滑后他的值域变为[1-smoothing, 1+smoothing]
+criterion = LabelSmoothing(size=V, padding_idx=0, smoothing=0.0)    # criterion 标准、尺度、规则、规范
+
+# 使用工具包SimpleLossCompute获得利用标签平滑的结果得到的损失计算
+loss = SimpleLossCompute(model.generator, criterion, model_optimizer)
+
+
+crit = LabelSmoothing(size=5, padding_idx=0, smoothing=.5)
+predict = Variable(torch.FloatTensor([[0, .2, .7, .1, 0],
+                                      [0, .2, .7, .1, 0],
+                                      [0, .2, .7, .1, 0]]))
+target = Variable(torch.LongTensor([2, 1, 0]))
+# 黄色方块，它相对于横坐标横跨的值域就是标签平滑后的正向平滑值域，我们可以看到大致是.5到2.5
+#         它相对于纵坐标横跨的值域就是标签平滑后的负向平滑值域，我们可以看到大致是-.5到1.5，总的值域空间由原来的[0,2]变为[-.5, 2.5]
+crit(predict, target)
+# plt.imshow(crit.true_dist)
+# plt.show()
+
+# def run(model, loss, epochs=10):
+#     """
+#     :param model: 训练的模型
+#     :param loss: 使用的损失计算方法
+#     :param epochs:
+#     """
+#     for epoch in range(epochs):
+#         # 首先进入训练模式，所有的参数都会被更新
+#         model.train()
+#         # 训练时，传入的batch_size是20
+#         run_epoch(data_generator(V, 8, 20), model, loss)
+#
+#         # 训练结束后，进入评估模式，所有参数固定不变
+#         model.eval()
+#         # 评估时，传入的batch_size是5
+#         run_epoch(data_generator(V, 8, 5), model, loss)
+#
+#
+# if __name__ == '__main__':
+#     run(model, loss)
+
+def run(model, loss, epochs=10):
+    for epoch in range(epochs):
+        # 首先进入训练模式 所有的参数将会被更新
+        model.train()
+
+        run_epoch(data_generator(V, 8, 20), model, loss)
+
+        # 训练结束后，进入评估模式，所有参数不更新
+        model.eval()
+
+        run_epoch(data_generator(V, 8, 5), model, loss)
+
+    # for结束代表训练结束，再次进入评估模式
+    model.eval()
+
+    # 初始化一个输入张量
+    source = Variable(torch.LongTensor([[1, 3, 2, 5, 4, 6, 7, 8, 9, 10]]))
+
+    # 初始化一个输入张量的掩码张量，全1代表没有任何遮掩
+    source_mask = Variable(torch.ones(1, 1, 10))    # 前两个1表示扩充维度
+
+    # 设定解码的最大长度max_len=10，起始数字标志默认等于1
+    result = greedy_decode(model, source, source_mask, max_len=10, start_symbol=1)
+    print(result)
+
+
+# if __name__ == '__main__':
+#     run(model, loss)
+
