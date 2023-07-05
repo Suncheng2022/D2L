@@ -10,5 +10,6 @@ others
 *.jpg
 *.JPG
 *.png
+*.log
 
 **pycache**
