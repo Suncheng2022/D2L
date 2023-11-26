@@ -56,8 +56,6 @@ def evaluate(model, test_iter, device):
         correct = 0
         total = 0
         for i, (x, y) in enumerate(tqdm(test_iter)):
-            if i == 5:
-                break
             x, y = x.to(device), y.to(device)
             y_hat = model(x)
             correct += torch.sum(y_hat.softmax(dim=-1).argmax(dim=-1) == y)
