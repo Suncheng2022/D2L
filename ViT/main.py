@@ -25,12 +25,12 @@ from tqdm import tqdm
 def parser():
     parser = argparse.ArgumentParser(description='ViT Classification Task. scc. 2023.11.25')
     parser.add_argument('--epochs', default=100, type=int, help='')
-    parser.add_argument('--batch', default=256, type=int, help='')
-    parser.add_argument('--num_workers', default=8, type=int, help='')
+    parser.add_argument('--batch', default=64, type=int, help='')
+    parser.add_argument('--num_workers', default=4, type=int, help='')
     parser.add_argument('--drop_last', default=True, type=bool, help='')
     parser.add_argument('--lr', default=0.005, type=float, help='')
     parser.add_argument('--save_dir', default='/Users/sunchengcheng/Projects/D2L/ViT/weights', type=str, help='')
-    parser.add_argument('--log_interval', default=10, type=int, help='log打印间隔多少iters')
+    parser.add_argument('--log_interval', default=1, type=int, help='log打印间隔多少iters')
     return parser.parse_args()
 
 
@@ -56,6 +56,8 @@ def evaluate(model, test_iter, device):
         correct = 0
         total = 0
         for i, (x, y) in enumerate(tqdm(test_iter)):
+            if i == 5:
+                break
             x, y = x.to(device), y.to(device)
             y_hat = model(x)
             correct += torch.sum(y_hat.softmax(dim=-1).argmax(dim=-1) == y)
@@ -140,7 +142,7 @@ def main():
                       f'acc {acc * 100:.4f}% batch_acc {batch_acc * 100:.4f}% '
                       f'batch_precision {batch_precision * 100:.4f} '
                       f'batch_recall {batch_recall * 100:.4f} f1_ {2 * batch_precision * batch_recall / (batch_precision + batch_recall) * 100:.4f}% '
-                      f'batch_f1 {batch_f1 * 100:.4f}')
+                      f'batch_f1 {batch_f1 * 100:.4f}% ')
             # backward update
             loss = loss_func(y_hat, y)
             loss.backward()
